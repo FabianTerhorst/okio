@@ -858,6 +858,56 @@ public final class BufferedSourceTest {
     }
   }
 
+  @Test public void doubleDecimalString() throws IOException {
+    assertDoubleDecimalString("-9223372036854775.808", -9223372036854775.808);
+    assertDoubleDecimalString("-1.0", -1.0);
+    assertDoubleDecimalString("0.0", 0.0);
+    assertDoubleDecimalString("1.0", 1.0);
+    assertDoubleDecimalString("1.......", 1.0, "......");
+    assertDoubleDecimalString("1.0.0", 1.0, ".0");
+    assertDoubleDecimalString("1.0.", 1., ".");
+    assertDoubleDecimalString("1..", 1.0, ".");
+    assertDoubleDecimalString("1.5..", 1.5, "..");
+    assertDoubleDecimalString("9223372036854775.807", 9223372036854775.807);
+
+    assertDoubleDecimalString("00000.001", 0.001);
+    assertDoubleDecimalString("-00000.1", 0.1);
+  }
+
+  private void assertDoubleDecimalString(String s, double expected, String rest) throws IOException {
+    sink.writeUtf8(s);
+    sink.writeUtf8("zzz");
+    double actual = source.readDecimalDouble();
+    assertEquals(s + " --> " + expected, expected, actual, 3);
+    assertEquals(rest + "zzz", source.readUtf8());
+  }
+
+  private void assertDoubleDecimalString(String s, double expected) throws IOException {
+    sink.writeUtf8(s);
+    sink.writeUtf8("zzz");
+    double actual = source.readDecimalDouble();
+    assertEquals(s + " --> " + expected, expected, actual, 3);
+    assertEquals("zzz", source.readUtf8());
+  }
+
+  @Test public void doubleDecimalStringAcrossSegment() throws IOException {
+    sink.writeUtf8(repeat('a', Segment.SIZE - 8)).writeUtf8("1234567890123456.789");
+    sink.writeUtf8("zzz");
+    source.skip(Segment.SIZE - 8);
+    assertEquals(1234567890123456.789, source.readDecimalDouble(), 3);
+    assertEquals("zzz", source.readUtf8());
+  }
+
+  @Test public void doubleDecimalStringTooLongThrows() throws IOException {
+    try {
+      sink.writeUtf8("12345678901234567.890"); // Too many digits.
+      source.readDecimalDouble();
+      fail();
+    } catch (NumberFormatException e) {
+      assertEquals("Number too large: 12345678901234567.890", e.getMessage());
+    }
+  }
+
   @Test public void codePoints() throws IOException {
     sink.write(ByteString.decodeHex("7f"));
     assertEquals(0x7f, source.readUtf8CodePoint());
@@ -872,11 +922,18 @@ public final class BufferedSourceTest {
     assertEquals(0x10ffff, source.readUtf8CodePoint());
   }
 
-  @Test public void decimalStringWithManyLeadingZeros() throws IOException {
+  @Test public void longDecimalStringWithManyLeadingZeros() throws IOException {
     assertLongDecimalString("00000000000000001", 1);
     assertLongDecimalString("00000000000000009223372036854775807", 9223372036854775807L);
     assertLongDecimalString("-00000000000000009223372036854775808", -9223372036854775808L);
     assertLongDecimalString(TestUtil.repeat('0', Segment.SIZE + 1) + "1", 1);
+  }
+
+  @Test public void doubleDecimalStringWithManyLeadingZeros() throws IOException {
+    assertDoubleDecimalString("00000000000000001", 1);
+    assertDoubleDecimalString("0000000000000000922337.203", 922337.203);
+    assertDoubleDecimalString("-0000000000000000922337.203", -922337.203);
+    assertDoubleDecimalString(TestUtil.repeat('0', Segment.SIZE + 1) + "1.123456789", 1.123456789);
   }
 
   @Test public void select() throws IOException {

@@ -216,6 +216,25 @@ public interface BufferedSource extends Source {
   long readDecimalLong() throws IOException;
 
   /**
+   * Reads a double from this source in signed decimal form (i.e., as a string in base 10 with
+   * optional leading '-'). This will iterate until a non-digit character is found. <pre>{@code
+   *
+   *   Buffer buffer = new Buffer()
+   *       .writeUtf8("86753.09 -12.3 000.01");
+   *
+   *   assertEquals(86753.09, buffer.readDecimalLong());
+   *   assertEquals(' ', buffer.readByte());
+   *   assertEquals(-12.3, buffer.readDecimalLong());
+   *   assertEquals(' ', buffer.readByte());
+   *   assertEquals(0.01, buffer.readDecimalLong());
+   * }</pre>
+   *
+   * @throws NumberFormatException if the found digits do not fit into a {@code long} or a decimal
+   * number was not present.
+   */
+  double readDecimalDouble() throws IOException;
+
+  /**
    * Reads a long form this source in hexadecimal form (i.e., as a string in base 16). This will
    * iterate until a non-hexadecimal character is found. <pre>{@code
    *

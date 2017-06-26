@@ -290,6 +290,32 @@ final class RealBufferedSource implements BufferedSource {
     return buffer.readDecimalLong();
   }
 
+  //TODO: we are always requesting the first dot, even if there is no number after, maybe request another byte to check if an number is there
+  @Override public double readDecimalDouble() throws IOException {
+    require(1);
+
+    boolean floating = false;
+    for (int pos = 0; request(pos + 1); pos++) {
+      byte b = buffer.getByte(pos);
+      if ((b < '0' || b > '9') && (pos != 0 || b != '-') && b != '.') {
+        // Non-digit, or non-leading negative sign.
+        if (pos == 0) {
+          throw new NumberFormatException(String.format(
+                  "Expected leading [0-9] or '-' character but was %#x", b));
+        }
+        break;
+      }
+      if (b == '.') {
+        if (floating) {
+          break;
+        }
+        floating = true;
+      }
+    }
+
+    return buffer.readDecimalDouble();
+  }
+
   @Override public long readHexadecimalUnsignedLong() throws IOException {
     require(1);
 

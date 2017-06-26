@@ -469,6 +469,71 @@ public final class Buffer implements BufferedSource, BufferedSink, Cloneable {
     return negative ? value : -value;
   }
 
+  public double readDecimalDouble() {
+    if (size == 0) throw new IllegalStateException("size == 0");
+
+    // This value is always built negatively in order to accommodate Long.MIN_VALUE.
+    double value = 0;
+    int seen = 0;
+    boolean negative = false;
+    boolean floating = false;
+    boolean done = false;
+
+    long floatingDigit = 1;
+
+    do {
+      Segment segment = head;
+
+      byte[] data = segment.data;
+      int pos = segment.pos;
+      int limit = segment.limit;
+
+      for (; pos < limit; pos++, seen++) {
+        byte b = data[pos];
+        if (b >= '0' && b <= '9') {
+          double digit = '0' - b;
+
+          // Detect when the digit would cause an overflow.
+          //Todo: unfinished
+          if (value + (digit / floatingDigit*10) == (negative ? Double.NEGATIVE_INFINITY :Double.POSITIVE_INFINITY)) {
+            Buffer buffer = new Buffer().writeUtf8(String.valueOf(value)).writeByte(b);
+            if (!negative) buffer.readByte(); // Skip negative sign.
+            throw new NumberFormatException("Number too large: " + buffer.readUtf8());
+          }
+
+          if (floating) {
+            digit /= floatingDigit *= 10;
+          } else {
+            value *= 10;
+          }
+          value += digit;
+        } else if (b == '-' && seen == 0) {
+          negative = true;
+        } else if (b == '.' && !floating) {
+          floating = true;
+        } else {
+          if (seen == 0) {
+            throw new NumberFormatException(
+                    "Expected leading [0-9] or '-' character but was 0x" + Integer.toHexString(b));
+          }
+          // Set a flag to stop iteration. We still need to run through segment updating below.
+          done = true;
+          break;
+        }
+      }
+
+      if (pos == limit) {
+        head = segment.pop();
+        SegmentPool.recycle(segment);
+      } else {
+        segment.pos = pos;
+      }
+    } while (!done && head != null);
+
+    size -= seen;
+    return negative ? value : -value;
+  }
+
   @Override public long readHexadecimalUnsignedLong() {
     if (size == 0) throw new IllegalStateException("size == 0");
 
